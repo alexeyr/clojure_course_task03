@@ -205,6 +205,20 @@
 ;; TBD: Implement the following macros
 ;;
 
+(defn group* [name body]
+  ;; Создаёт тело для group
+  (if (empty? body)
+    '()
+    (let [[table-name _ columns & rest] body
+          columns1 (map keyword columns)
+          var-name (symbol (str "-" name "-" table-name "-fields"))
+          fun-name (symbol (str "select-" name "-" table-name))
+          fields-var-name (symbol (str table-name "-fields-var"))]
+      `((def ~var-name (list ~@columns1))
+        (defn ~fun-name [] (let [~fields-var-name [:all]] (select ~table-name (~'fields ~@columns1)))) 
+        ~@(group* name rest))
+  )))
+
 (defmacro group [name & body]
   ;; Пример
   ;; (group Agent
@@ -216,6 +230,7 @@
   ;; 3) Создает следующие функции
   ;;    (select-agent-proposal) ;; select person, phone, address, price from proposal;
   ;;    (select-agent-agents)  ;; select clients_id, proposal_id, agent from agents;
+  `(do ~@(group* (symbol (.toLowerCase (str name))) body))
   )
 
 (defmacro user [name & body]
@@ -224,7 +239,7 @@
   ;;     (belongs-to Agent))
   ;; Создает переменные Ivanov-proposal-fields-var = [:person, :phone, :address, :price]
   ;; и Ivanov-agents-fields-var = [:clients_id, :proposal_id, :agent]
-  )
+  `())
 
 (defmacro with-user [name & body]
   ;; Пример
@@ -236,4 +251,39 @@
   ;;    proposal-fields-var и agents-fields-var.
   ;;    Таким образом, функция select, вызванная внутри with-user, получает
   ;;    доступ ко всем необходимым переменным вида <table-name>-fields-var.
-  )
+  `())
+
+;Макрос group должен создавать какую-то глобальную переменную (при помощи def). 
+;Например, есть такое:
+;
+;(group Operator
+;proposal -> [:all])
+;
+;Можно реализовать макрос group так, чтобы он возвращал список 
+;(do (def -operator-proposal-fields [:all]))
+;
+;Соответственно, переменная -operator-proposal-fields будет доступна во всем неймспейсе.
+;
+;Затем, такой код:
+;
+;(user Ivanov
+;(belongs-to Operator))
+;
+;Мы знаем, что где-то объявлены глобальные переменные вида -<group>-<table>-fields. 
+;Поэтому в макросе user мы объявляем переменную Ivanov-proposal-fields-var. 
+;Раз Ivanov принадлежит группе Operator, то в Ivanov-proposal-fields-var записываем 
+;значение переменной -operator-proposal-fields.
+;
+;Далее.
+;
+;(with-user Ivanov
+;(select proposal
+;(fields :all)))
+;
+;Макрос with-user должен найти все глобальные переменные, которые начинаются со слова 
+;Ivanov и создать их локальные версии без префикса Ivanov. Т.е. в compile-time нужно 
+;сгенерировать код
+;
+;(let [proposal-fields-var Ivanov-proposal-fields-var]
+;(select proposal
+;(fields :all)))
