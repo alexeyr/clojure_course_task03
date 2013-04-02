@@ -234,7 +234,7 @@
   )
 
 (defn filter-vars [pred]
-  (filter pred (vals (ns-publics *ns*))))
+  (filter (comp pred var-name) (vals (ns-publics *ns*))))
 
 (defn var-name [var]
   (str (:name (meta var))))
@@ -246,10 +246,9 @@
           group-name (second gr)
           prefix (str "-" group-name)
           vars (filter-vars 
-                 #(let [vn (var-name %)]
-                    (and 
-                      (.startsWith vn prefix)
-                      (.endsWith vn "fields"))))
+                 #(and 
+                    (.startsWith % prefix)
+                    (.endsWith % "fields")))
           make-var (fn [var] 
                      (let [new-var-name (symbol (.replaceFirst (var-name var) prefix (str name)))]
                      `(def ~new-var-name (var-get ~var))))]
