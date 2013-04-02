@@ -233,11 +233,11 @@
   `(do ~@(group* name body))
   )
 
-(defn filter-vars [pred]
-  (filter (comp pred var-name) (vals (ns-publics *ns*))))
-
 (defn var-name [var]
   (str (:name (meta var))))
+
+(defn filter-vars [pred]
+  (filter (comp pred var-name) (vals (ns-publics *ns*))))
 
 (defn user* [name body]
   (if (empty? body)
@@ -250,7 +250,7 @@
                     (.startsWith % prefix)
                     (.endsWith % "fields")))
           make-var (fn [var] 
-                     (let [new-var-name (symbol (.replaceFirst (var-name var) prefix (str name)))]
+                     (let [new-var-name (symbol (str (.replaceFirst (var-name var) prefix (str name)) "-var"))]
                      `(def ~new-var-name (var-get ~var))))]
       (concat (map make-var vars) (user* name rest))
   )))
@@ -273,7 +273,14 @@
   ;;    proposal-fields-var и agents-fields-var.
   ;;    Таким образом, функция select, вызванная внутри with-user, получает
   ;;    доступ ко всем необходимым переменным вида <table-name>-fields-var.
-  `())
+  (let [sname (str name)
+        vars (filter-vars #(.startsWith % sname))
+        make-local (fn [var]
+                     (let [vn (var-name var)
+                           new-vn (symbol (.substring vn (+ (.length sname) 1)))]
+                     `(~new-vn (var-get ~var))))
+        locals (mapcat make-local vars)]
+    `(let [~@locals] ~@body)))
 
 ;Макрос group должен создавать какую-то глобальную переменную (при помощи def). 
 ;Например, есть такое:
