@@ -212,7 +212,7 @@
     (let [[table-name _ columns & rest] body
           columns1 (map keyword columns)
           var-name (symbol (str "-" name "-" table-name "-fields"))
-          fun-name (symbol (str "select-" name "-" table-name))
+          fun-name (symbol (str "select-" (symbol (.toLowerCase (str name))) "-" table-name))
           fields-var-name (symbol (str table-name "-fields-var"))]
       `((def ~var-name (list ~@columns1))
         (defn ~fun-name [] (let [~fields-var-name [:all]] (select ~table-name (~'fields ~@columns1)))) 
@@ -230,8 +230,31 @@
   ;; 3) Создает следующие функции
   ;;    (select-agent-proposal) ;; select person, phone, address, price from proposal;
   ;;    (select-agent-agents)  ;; select clients_id, proposal_id, agent from agents;
-  `(do ~@(group* (symbol (.toLowerCase (str name))) body))
+  `(do ~@(group* name body))
   )
+
+(defn filter-vars [pred]
+  (filter pred (vals (ns-publics *ns*))))
+
+(defn var-name [var]
+  (str (:name (meta var))))
+
+(defn user* [name body]
+  (if (empty? body)
+    '()
+    (let [[gr & rest] body
+          group-name (second gr)
+          prefix (str "-" group-name)
+          vars (filter-vars 
+                 #(let [vn (var-name %)]
+                    (and 
+                      (.startsWith vn prefix)
+                      (.endsWith vn "fields"))))
+          make-var (fn [var] 
+                     (let [new-var-name (symbol (.replaceFirst (var-name var) prefix (str name)))]
+                     `(def ~new-var-name (var-get ~var))))]
+      (concat (map make-var vars) (user* name rest))
+  )))
 
 (defmacro user [name & body]
   ;; Пример
@@ -239,7 +262,7 @@
   ;;     (belongs-to Agent))
   ;; Создает переменные Ivanov-proposal-fields-var = [:person, :phone, :address, :price]
   ;; и Ivanov-agents-fields-var = [:clients_id, :proposal_id, :agent]
-  `())
+  `(do ~@(user* name body)))
 
 (defmacro with-user [name & body]
   ;; Пример
